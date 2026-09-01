@@ -34,6 +34,10 @@ final class GlossView: NSView {
 
     /// Two gradients differing by one step in a single invisible pixel.
     private var frames: (CGImage, CGImage)?
+
+    /// Stand-ins that draw nothing, so the keep-alive can carry on nudging while
+    /// the gloss is suspended and the filter is never dropped underneath us.
+    private let blankFrames = GradientImage.makeBlankPair()
     private var showingSecondFrame = false
     private var keepAliveTimer: Timer?
 
@@ -46,6 +50,17 @@ final class GlossView: NSView {
 
     var polarity: BarPolarity = .light {
         didSet { if polarity != oldValue { rebuild() } }
+    }
+
+    /// Set while the window server is compositing through a path that ignores
+    /// the filter — a space slide, mostly. See `SpaceTransitionWatcher`.
+    ///
+    /// The gradient is swapped for something invisible rather than the window
+    /// being ordered out: nothing transparent can show the raw grey, restoring
+    /// it is immediate, and it avoids the ordering churn and show animation that
+    /// come with taking a borderless window off screen and putting it back.
+    var isSuspended: Bool = false {
+        didSet { if isSuspended != oldValue { showCurrentFrame() } }
     }
 
     init() {
@@ -81,7 +96,17 @@ final class GlossView: NSView {
         root.contentsScale = key.1
         frames = GradientImage.makePair(variant: Gloss.variant(for: polarity),
                                         height: key.0, scale: key.1)
-        root.contents = frames?.0
+        showingSecondFrame = false
+        showCurrentFrame()
+    }
+
+    private func showCurrentFrame() {
+        guard let root = layer else { return }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        let pair = isSuspended ? blankFrames : frames
+        root.contents = showingSecondFrame ? pair?.1 : pair?.0
+        CATransaction.commit()
     }
 
     override func layout() {
@@ -123,12 +148,17 @@ final class GlossView: NSView {
         keepAliveTimer = timer
     }
 
+    /// Force a content change now.
+    ///
+    /// A window that has been off screen — auto-hide, a full-screen space — has
+    /// had no updates the window server counts, so its filter will have lapsed
+    /// the same way an idle one does. Nudging it as it is ordered back means the
+    /// first frame on screen is a blended one rather than a grey one.
+    func kick() { nudge() }
+
+    /// Runs while suspended too — see `GradientImage.makeBlankPair()`.
     @objc private func nudge() {
-        guard let frames, let root = layer else { return }
         showingSecondFrame.toggle()
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        root.contents = showingSecondFrame ? frames.1 : frames.0
-        CATransaction.commit()
+        showCurrentFrame()
     }
 }

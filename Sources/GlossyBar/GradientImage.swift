@@ -13,6 +13,33 @@ enum GradientImage {
         return (a, b)
     }
 
+    /// A pair that draws nothing, alternated in place of the gradient while the
+    /// gloss is suspended.
+    ///
+    /// The keep-alive has to go on running through a transition. Stop nudging
+    /// and the window server files the window as idle after about a second — so
+    /// a Mission Control that lasts any time at all ends with the filter already
+    /// dropped, and the first frame the gradient comes back on is a grey one.
+    /// These two differ by a single step of alpha: enough to count as a change,
+    /// far too little to see, and invisible whether or not the filter is being
+    /// honoured at the time.
+    static func makeBlankPair() -> (CGImage, CGImage)? {
+        guard let a = blank(alpha: 0), let b = blank(alpha: 1) else { return nil }
+        return (a, b)
+    }
+
+    private static func blank(alpha: UInt8) -> CGImage? {
+        // Premultiplied, so the colour has to be black at these alphas anyway.
+        let bytes: [UInt8] = [0, 0, 0, alpha]
+        guard let provider = CGDataProvider(data: Data(bytes) as CFData) else { return nil }
+        return CGImage(width: 1, height: 1,
+                       bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: 4,
+                       space: CGColorSpaceCreateDeviceRGB(),
+                       bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
+                       provider: provider, decode: nil,
+                       shouldInterpolate: false, intent: .defaultIntent)
+    }
+
     /// Builds the 1×N tone gradient that gets blended into the menu bar. N is in
     /// *device* pixels so the top hairline lands exactly on a pixel instead of
     /// being interpolated into a smudge.

@@ -42,6 +42,112 @@ because they go through the software compositor. Hence one window with one
 the window every 0.4s so the window server never files it as idle. Per-frame
 nudging off a display link works too and costs ~3% CPU; 0.4s costs ~0.25%.
 
+Idleness is not the only thing that takes the filter away — see
+[Transitions](#transitions).
+
+### Transitions
+
+The filter is dropped during **Mission Control** and during a **space slide**,
+and the raw gradient shows through as a flat grey strip across the bar. Two
+causes, and neither has an event to react to, so `CompositingMonitor` watches for
+both off a per-frame `DisplayLink`.
+
+**Mission Control** was partly self-inflicted. The overlay asked for
+`NSWindow.CollectionBehavior.stationary`, documented as *"unaffected by Exposé;
+it stays visible and stationary"* — so it stayed up through the whole of it.
+`.transient` is the documented opposite, *"floats in Spaces and is hidden by
+Exposé"*, and the window server does honour it, but not promptly: it takes about
+0.7s to take the window away, which is long enough to watch the bar go grey and
+come back. Sampling the window list through Mission Control cycles:
+
+| Collection behaviour | Overlay window on screen |
+| --- | --- |
+| `.stationary` | 100% of the cycle |
+| `.transient` | ~21% — the opening animation, then gone |
+
+So `.transient` stays, as a backstop that costs nothing, and the monitor covers
+the opening. Mission Control puts up full-width `WindowManager` windows below the
+menu bar level — layers 14 and 19 as measured — from its very first frame, and
+neither appears at rest nor during a space slide.
+
+**Space slides** cannot be fixed with a collection behaviour at all. The window
+server folds every menu-bar-level window into the *outgoing* space's scene and
+animates it off to the side; there are two real menu bars mid-slide, one per
+space, and the overlay rides the one it was already over. It is never pinned and
+never duplicated into the incoming space, under any combination of
+`canJoinAllSpaces` / `managed` / `transient` / `stationary`. The tell is that a
+real menu bar leaves its screen's left edge, on the first frame of the slide.
+
+Measured against that first frame, for the signals that might have saved a poll:
+
+| Signal | When it fires |
+| --- | --- |
+| `activeSpaceDidChange` | ~0.49s in — *after* the ~0.47s animation has ended |
+| overlay's `didChangeOcclusionState` | frame 0 on some transitions, +0.3s on others |
+| overlay's `didMove` / `didResize` / `didChangeScreen` | never |
+
+Hence the display link. It drives the *watch* only — the keep-alive nudge stays
+on its own 0.4s timer, which is a separate job. One window-list pass per frame
+answers both questions, and the gloss comes off the layer on the frame the
+transition starts: measured at -0.014s for Mission Control and ±0.001s across
+space slides, against 0.29s and ~0.47s of grey before. The link runs at a
+measured 16.7ms, p99 16.7ms, nothing over 25ms, so one frame is the whole of the
+detection lag — and one frame is also the floor, because the transition can only
+be seen after the window server has already begun it.
+
+Suspending is not simply a matter of not drawing, though, and three things
+around it each put the grey back:
+
+- **The keep-alive has to go on running.** Stop nudging for the duration and the
+  window is idle inside a second, so a Mission Control of any length ends with
+  the filter already dropped and the first frame back is grey — up to 0.4s of it,
+  until the next nudge. The gradient is therefore swapped for an invisible pair
+  rather than removed, and the nudge carries on through the suspension.
+- **Coming back has to lag.** The window server stays in its transition path for
+  a moment after the geometry settles, so the gloss waits
+  `CompositingMonitor.settleDelay` (0.15s) of clear frames before returning.
+  Suspending stays instant: the two directions are not worth the same, since a
+  bar that stays plain a few frames too long is invisible and one that returns a
+  frame early is the flash.
+- **Ordering has to be left alone.** `refresh()` used to haul the window back
+  with `orderFrontRegardless` every third of a second, which during Mission
+  Control is a fight with the `.transient` that is trying to take it away. It now
+  leaves the ordering be while suspended — and `kick()`s the layer whenever the
+  window *is* ordered back, because a window that has been off screen has had no
+  updates the window server counts and its filter will have lapsed too.
+
+The cost is all in asking the window server anything at all: ~138µs for the IPC
+round trip whatever is asked, so neither `CGWindowListCreateDescriptionFromArray`
+(which returns nothing on macOS 27) nor anchoring with `optionIncludingWindow`
+beats a filtered scan by much. What is left to control is how much of the reply
+gets bridged into Swift, which is why the reads are at CoreFoundation level —
+bridging to `[[String: Any]]` deep-converts every window's dictionary and costs
+more than the round trip that fetched it. Per 60Hz tick:
+
+| | CPU |
+| --- | --- |
+| bare tick, no query | 0.20% |
+| + one query, read at CoreFoundation level | 1.11% |
+| + the same reply bridged to `[[String: Any]]` | 2.39% |
+
+Whole app, measured the same way throughout:
+
+| | Idle | Continuous input |
+| --- | --- | --- |
+| Before, with the bug | 0.25% | 0.30% |
+| Now | 1.61% | 1.70% |
+
+That is the price of watching every frame, and it is deliberate: an earlier
+version gated the query on recent input to idle at 0.50%, which is cheaper but
+leans on the assumption that transitions only ever follow input. Lickable Menu
+Bar reaches the same place by the same route — its binary carries a
+`MissionControlMonitor` built on a polling monitor, a `MenuBarStyler`
+`isMissionControlActive` flag, space-change and occlusion observers, and a
+`CVDisplayLink` — which is some comfort that there is no cleverer trick being
+missed. It uses `setCompositingFilter:` too, and only *reads* the wallpaper
+(`desktopImageURLForScreen:`), so the effect is not baked into the desktop
+picture.
+
 ### Why hard light
 
 The real menu titles have to survive, which rules out a translucent overlay — it
@@ -132,6 +238,8 @@ a second, no restart).
 - Punches out the camera housing on notched displays, where blending over pure
   black would show as a grey band.
 - Never takes focus, never takes clicks, and stays below open menus and alerts.
+- Pulls the gloss on the frame a space slide or Mission Control starts, because
+  the filter survives neither, and puts it back on the frame they end.
 
 ## Notes
 

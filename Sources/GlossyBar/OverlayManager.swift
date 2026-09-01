@@ -6,12 +6,26 @@ final class OverlayManager {
     private var windows: [OverlayWindow] = []
     private var timer: Timer?
 
+    /// Pulls the gloss whenever the window server is compositing through a path
+    /// that ignores the filter — a space slide, or Mission Control.
+    private let compositing = CompositingMonitor()
+
     /// Set before `start()`. Reports the menu bar's real light/dark polarity.
     var probe: MenuBarProbe?
 
     func start() {
+        compositing.onChange = { [weak self] suspended in
+            guard let self else { return }
+            self.windows.forEach { $0.gloss.isSuspended = suspended }
+            // Exposé may have taken the windows off screen while the gloss was
+            // out. Put them back the moment it is due again, rather than leaving
+            // it to the next poll a third of a second later.
+            if !suspended { self.refresh() }
+        }
+        compositing.start()
+
         let nc = NotificationCenter.default
-        nc.addObserver(self, selector: #selector(refresh),
+        nc.addObserver(self, selector: #selector(screensChanged),
                        name: NSApplication.didChangeScreenParametersNotification, object: nil)
         nc.addObserver(self, selector: #selector(refresh),
                        name: Settings.didChange, object: nil)
@@ -33,7 +47,13 @@ final class OverlayManager {
     func stop() {
         timer?.invalidate()
         timer = nil
+        compositing.stop()
         teardown()
+    }
+
+    @objc private func screensChanged() {
+        compositing.screensChanged()
+        refresh()
     }
 
     private func teardown() {
@@ -69,8 +89,16 @@ final class OverlayManager {
             if window.frame != frame { window.setFrame(frame, display: false) }
             window.gloss.paintableRects = MenuBarGeometry.paintableRects(for: screen, overlay: frame)
             window.gloss.polarity = polarity
+            window.gloss.isSuspended = compositing.shouldSuspend
 
-            if !window.isVisible { window.orderFrontRegardless() }
+            // Don't fight `.transient`. While suspended the window server may
+            // have taken the window away for Exposé, and hauling it back on
+            // every refresh only churns the ordering — nothing is being drawn
+            // either way.
+            if !compositing.shouldSuspend, !window.isVisible {
+                window.orderFrontRegardless()
+                window.gloss.kick()
+            }
         }
     }
 }
