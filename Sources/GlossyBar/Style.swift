@@ -109,7 +109,7 @@ enum Shadow {
     static let height: CGFloat = 16
 
     /// Alpha immediately under the bar, before `shadowStrength` is applied.
-    static let peak: CGFloat = 0.26
+    static let peak: CGFloat = 0.34
 
     /// Falloff top → bottom, as a fraction of `peak`. Locations are fractions of
     /// `height`, so at 16pt the first five stops cover the first four points.
