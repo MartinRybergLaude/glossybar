@@ -199,7 +199,7 @@ Two deliberate departures:
   a second window at layer -2147483602 — above the wallpaper and the desktop
   icons, below every app window, so it falls on the desktop and is covered by
   anything in front of it. Same window and same layer here, but 16pt peaking at
-  0.10 alpha and easing to nothing, because Lickable's reads as a band of
+  0.14 alpha and easing to nothing, because Lickable's reads as a band of
   darkness across the top of the desktop rather than an edge. `Shadow` in
   `Style.swift` holds the profile. **Shadow** in the menu turns it on and off;
   how heavy it is stays out of the menu, but

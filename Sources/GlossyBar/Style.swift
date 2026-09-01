@@ -98,7 +98,7 @@ enum Shadow {
     static let height: CGFloat = 16
 
     /// Alpha immediately under the bar, before `shadowStrength` is applied.
-    static let peak: CGFloat = 0.10
+    static let peak: CGFloat = 0.14
 
     /// Falloff top → bottom, as a fraction of `peak`.
     static let falloff: [(loc: CGFloat, level: CGFloat)] = [
