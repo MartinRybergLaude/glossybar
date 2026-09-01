@@ -13,6 +13,40 @@ enum GradientImage {
         return (a, b)
     }
 
+    /// Builds the 1×N shadow that falls under the bar: black, easing from
+    /// `Shadow.peak * strength` to nothing. N is in *device* pixels, same as the
+    /// gloss, so the falloff is smooth rather than stepped.
+    ///
+    /// Premultiplied, so the colour channels stay at zero and track the alpha.
+    static func makeShadow(height: CGFloat, scale: CGFloat, strength: CGFloat) -> CGImage? {
+        let rows = max(2, Int((height * scale).rounded()))
+        let stops = Shadow.falloff
+
+        func sample(_ t: CGFloat) -> CGFloat {
+            if t <= stops[0].loc { return stops[0].level }
+            for i in 1..<stops.count where t <= stops[i].loc {
+                let a = stops[i - 1], b = stops[i]
+                let f = b.loc == a.loc ? 0 : (t - a.loc) / (b.loc - a.loc)
+                return a.level + (b.level - a.level) * f
+            }
+            return stops.last!.level
+        }
+
+        var bytes = [UInt8](repeating: 0, count: rows * 4)
+        for row in 0..<rows {
+            let alpha = Shadow.peak * strength * sample(CGFloat(row) / CGFloat(rows - 1))
+            bytes[row * 4 + 3] = UInt8(max(0, min(255, (alpha * 255).rounded())))
+        }
+
+        guard let provider = CGDataProvider(data: Data(bytes) as CFData) else { return nil }
+        return CGImage(width: 1, height: rows,
+                       bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: 4,
+                       space: CGColorSpaceCreateDeviceRGB(),
+                       bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
+                       provider: provider, decode: nil,
+                       shouldInterpolate: false, intent: .defaultIntent)
+    }
+
     /// A pair that draws nothing, alternated in place of the gradient while the
     /// gloss is suspended.
     ///

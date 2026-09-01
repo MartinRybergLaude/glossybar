@@ -76,3 +76,30 @@ enum Gloss {
         }
     }
 }
+
+/// The soft edge under the bar.
+///
+/// Lickable Menu Bar runs 20pt of shadow in a window of its own at
+/// `desktopIconWindow + 1` — above the wallpaper and the desktop icons, below
+/// every app window — so it falls on the desktop and is covered by anything in
+/// front of it. Same placement here, and deliberately far lighter: Lickable's
+/// reads as a band of darkness across the top of the desktop rather than an
+/// edge. This one peaks at `peak` immediately under the bar and eases to
+/// nothing over `height`, which is the shape a blurred edge actually has.
+///
+/// There is no menu item, the same as `heightAdjustment`, but there is an
+/// escape hatch: `defaults write com.glossybar.GlossyBar shadowStrength -float 0`
+/// turns it off, `2` doubles it, and it applies within a second.
+enum Shadow {
+    /// How far the shadow reaches below the bar, in points.
+    static let height: CGFloat = 16
+
+    /// Alpha immediately under the bar, before `shadowStrength` is applied.
+    static let peak: CGFloat = 0.10
+
+    /// Falloff top → bottom, as a fraction of `peak`.
+    static let falloff: [(loc: CGFloat, level: CGFloat)] = [
+        (0.00, 1.00), (0.15, 0.72), (0.35, 0.42),
+        (0.60, 0.18), (0.80, 0.06), (1.00, 0.00),
+    ]
+}

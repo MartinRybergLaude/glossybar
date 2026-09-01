@@ -19,7 +19,9 @@ every display, with the keep-alive always running.
 The menu bar isn't themable, so GlossyBar doesn't try to replace it. It puts
 borderless, click-through windows one level above the menu bar
 (`kCGMainMenuWindowLevel + 1`) and blends gradients into whatever the system
-already drew.
+already drew. A second, much simpler window hangs below the bar down at desktop
+level for the shadow — plain alpha, no filter, so none of what follows applies
+to it.
 
 Getting a window to alter the pixels behind it is the whole trick, and most of
 the obvious routes don't work. Measured on macOS 27:
@@ -193,9 +195,15 @@ Two deliberate departures:
 
 - **No bottom hairline.** Lickable finishes the bar with a light 0.575 line on
   its bottom edge. Dropped, so the gradient just runs out at the last row.
-- **No drop shadow.** Lickable also puts a 20pt shadow under the bar in a second
-  window at layer -2147483602, below app windows but above the wallpaper. Left
-  out by choice.
+- **A much lighter drop shadow.** Lickable puts 20pt of shadow under the bar in
+  a second window at layer -2147483602 — above the wallpaper and the desktop
+  icons, below every app window, so it falls on the desktop and is covered by
+  anything in front of it. Same window and same layer here, but 16pt peaking at
+  0.10 alpha and easing to nothing, because Lickable's reads as a band of
+  darkness across the top of the desktop rather than an edge. `Shadow` in
+  `Style.swift` holds the profile. There is no menu item, but
+  `defaults write com.glossybar.GlossyBar shadowStrength -float 0` turns it off
+  and `2` doubles it, applying within a second.
 
 The light variant follows the same shape, but spends its upper-half lightening
 before the glyph rows (~0.20). Lickable lightens straight through them, which is
@@ -238,6 +246,8 @@ a second, no restart).
 - Punches out the camera housing on notched displays, where blending over pure
   black would show as a grey band.
 - Never takes focus, never takes clicks, and stays below open menus and alerts.
+- Casts a soft edge onto the desktop below the bar, hidden by any window in
+  front of it.
 - Pulls the gloss on the frame a space slide or Mission Control starts, because
   the filter survives neither, and puts it back on the frame they end.
 

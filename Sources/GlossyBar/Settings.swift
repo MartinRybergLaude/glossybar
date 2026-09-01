@@ -10,6 +10,7 @@ final class Settings {
         static let enabled = "enabled"
         static let tone = "tone"
         static let heightAdjustment = "heightAdjustment"
+        static let shadowStrength = "shadowStrength"
     }
 
     private init() {
@@ -17,6 +18,7 @@ final class Settings {
             Key.enabled: true,
             Key.tone: Tone.auto.rawValue,
             Key.heightAdjustment: 0.0,
+            Key.shadowStrength: 1.0,
         ])
     }
 
@@ -29,6 +31,12 @@ final class Settings {
     /// answer moves around a little, so this is the escape hatch.
     var heightAdjustment: Double {
         defaults.double(forKey: Key.heightAdjustment)
+    }
+
+    /// Multiplier on the soft edge under the bar; 0 turns it off. Not in the
+    /// menu, for the same reason `heightAdjustment` isn't — see `Shadow`.
+    var shadowStrength: Double {
+        max(0, defaults.double(forKey: Key.shadowStrength))
     }
 
     /// Which variant to use. Auto follows the menu bar's own appearance.

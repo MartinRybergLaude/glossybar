@@ -35,6 +35,14 @@ enum MenuBarGeometry {
                height: height)
     }
 
+    /// Screen-coordinate rect for the shadow, hanging directly under the bar.
+    /// Full width even on a notched display: the notch is at the top, so the
+    /// bar's bottom edge runs straight across.
+    static func shadowFrame(below overlay: CGRect, height: CGFloat) -> CGRect {
+        CGRect(x: overlay.minX, y: overlay.minY - height,
+               width: overlay.width, height: height)
+    }
+
     /// Sub-rects of the overlay that are safe to paint, in top-left-origin view
     /// coordinates. On a notched display this is the two areas flanking the
     /// camera housing; elsewhere it's the whole strip.

@@ -1,9 +1,11 @@
 import AppKit
 
-/// Owns one overlay window per screen and keeps them in sync with the screen
-/// layout, the current space, and the settings.
+/// Owns one overlay window per screen — and one shadow window under it — and
+/// keeps them in sync with the screen layout, the current space, and the
+/// settings.
 final class OverlayManager {
     private var windows: [OverlayWindow] = []
+    private var shadows: [ShadowWindow] = []
     private var timer: Timer?
 
     /// Pulls the gloss whenever the window server is compositing through a path
@@ -59,6 +61,8 @@ final class OverlayManager {
     private func teardown() {
         windows.forEach { $0.orderOut(nil) }
         windows.removeAll()
+        shadows.forEach { $0.orderOut(nil) }
+        shadows.removeAll()
     }
 
     @objc private func refresh() {
@@ -74,11 +78,19 @@ final class OverlayManager {
 
         while windows.count < screens.count { windows.append(OverlayWindow()) }
         while windows.count > screens.count { windows.removeLast().orderOut(nil) }
+        while shadows.count < screens.count { shadows.append(ShadowWindow()) }
+        while shadows.count > screens.count { shadows.removeLast().orderOut(nil) }
 
-        for (window, screen) in zip(windows, screens) {
+        let strength = CGFloat(settings.shadowStrength)
+
+        for (index, screen) in screens.enumerated() {
+            let window = windows[index]
+            let shadow = shadows[index]
+
             guard MenuBarGeometry.menuBarIsShowing(on: screen),
                   !MenuBarGeometry.menuBarCovered(on: screen, windowBounds: windowBounds) else {
                 window.orderOut(nil)
+                shadow.orderOut(nil)
                 continue
             }
 
@@ -99,6 +111,18 @@ final class OverlayManager {
                 window.orderFrontRegardless()
                 window.gloss.kick()
             }
+
+            // The shadow has no compositing filter, so it needs none of the
+            // suspending the gloss does — plain alpha survives a space slide
+            // and Mission Control on its own.
+            guard strength > 0 else {
+                shadow.orderOut(nil)
+                continue
+            }
+            let below = MenuBarGeometry.shadowFrame(below: frame, height: Shadow.height)
+            if shadow.frame != below { shadow.setFrame(below, display: false) }
+            shadow.strength = strength
+            if !shadow.isVisible { shadow.orderFrontRegardless() }
         }
     }
 }
