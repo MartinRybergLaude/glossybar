@@ -84,8 +84,19 @@ enum Gloss {
 /// every app window — so it falls on the desktop and is covered by anything in
 /// front of it. Same placement here, and deliberately far lighter: Lickable's
 /// reads as a band of darkness across the top of the desktop rather than an
-/// edge. This one peaks at `peak` immediately under the bar and eases to
-/// nothing over `height`, which is the shape a blurred edge actually has.
+/// edge.
+///
+/// The weight is concentrated at the top rather than spread down the whole
+/// 16pt. The falloff below is close to exponential — roughly 0.73x per point
+/// over the first few — so more than half of it lands within 3pt of the bar and
+/// the rest trails away to nothing. That is the shape a blurred edge actually
+/// has, and it is what makes the bar read as *separated* rather than merely
+/// sitting above a dimmer patch of wallpaper: an even wash just darkens the top
+/// of the desktop, where a tight line under the bar reads as an edge.
+///
+/// It also wastes little if the bar's last point covers the first row of it.
+/// The overlay is sized from `visibleFrame` and the window server draws a point
+/// taller than that, so the top of the shadow can end up behind the bar.
 ///
 /// **Shadow** in the status item menu turns it on and off. How heavy it is stays
 /// out of the menu, the same as `heightAdjustment`, but has the same escape
@@ -98,11 +109,14 @@ enum Shadow {
     static let height: CGFloat = 16
 
     /// Alpha immediately under the bar, before `shadowStrength` is applied.
-    static let peak: CGFloat = 0.14
+    static let peak: CGFloat = 0.26
 
-    /// Falloff top → bottom, as a fraction of `peak`.
+    /// Falloff top → bottom, as a fraction of `peak`. Locations are fractions of
+    /// `height`, so at 16pt the first five stops cover the first four points.
     static let falloff: [(loc: CGFloat, level: CGFloat)] = [
-        (0.00, 1.00), (0.15, 0.72), (0.35, 0.42),
-        (0.60, 0.18), (0.80, 0.06), (1.00, 0.00),
+        (0.0000, 1.000), (0.0625, 0.760), (0.1250, 0.560),
+        (0.1875, 0.410), (0.2500, 0.300), (0.3750, 0.170),
+        (0.5000, 0.095), (0.6875, 0.040), (0.8750, 0.012),
+        (1.0000, 0.000),
     ]
 }
