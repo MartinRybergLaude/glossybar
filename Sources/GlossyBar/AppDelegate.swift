@@ -69,6 +69,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
 
         menu.addItem(.separator())
+        let shadow = NSMenuItem(title: "Shadow", action: #selector(toggleShadow), keyEquivalent: "")
+        shadow.target = self
+        shadow.state = settings.shadowEnabled ? .on : .off
+        menu.addItem(shadow)
+
+        menu.addItem(.separator())
         let login = NSMenuItem(title: "Open at Login", action: #selector(toggleLoginItem), keyEquivalent: "")
         login.target = self
         login.state = SMAppService.mainApp.status == .enabled ? .on : .off
@@ -95,6 +101,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard let raw = sender.representedObject as? String,
               let tone = Settings.Tone(rawValue: raw) else { return }
         Settings.shared.tone = tone
+    }
+
+    @objc private func toggleShadow() {
+        Settings.shared.shadowEnabled.toggle()
     }
 
     @objc private func toggleLoginItem() {

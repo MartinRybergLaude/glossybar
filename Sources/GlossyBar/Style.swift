@@ -87,9 +87,12 @@ enum Gloss {
 /// edge. This one peaks at `peak` immediately under the bar and eases to
 /// nothing over `height`, which is the shape a blurred edge actually has.
 ///
-/// There is no menu item, the same as `heightAdjustment`, but there is an
-/// escape hatch: `defaults write com.glossybar.GlossyBar shadowStrength -float 0`
-/// turns it off, `2` doubles it, and it applies within a second.
+/// **Shadow** in the status item menu turns it on and off. How heavy it is stays
+/// out of the menu, the same as `heightAdjustment`, but has the same escape
+/// hatch: `defaults write com.glossybar.GlossyBar shadowStrength -float 0.5`
+/// halves it, `2` doubles it, and it applies within a second. The two are held
+/// apart so that toggling the menu item gives back whatever the strength was
+/// tuned to.
 enum Shadow {
     /// How far the shadow reaches below the bar, in points.
     static let height: CGFloat = 16

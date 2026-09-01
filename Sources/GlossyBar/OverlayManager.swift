@@ -81,7 +81,7 @@ final class OverlayManager {
         while shadows.count < screens.count { shadows.append(ShadowWindow()) }
         while shadows.count > screens.count { shadows.removeLast().orderOut(nil) }
 
-        let strength = CGFloat(settings.shadowStrength)
+        let strength = CGFloat(settings.resolvedShadowStrength)
 
         for (index, screen) in screens.enumerated() {
             let window = windows[index]

@@ -10,6 +10,7 @@ final class Settings {
         static let enabled = "enabled"
         static let tone = "tone"
         static let heightAdjustment = "heightAdjustment"
+        static let shadow = "shadow"
         static let shadowStrength = "shadowStrength"
     }
 
@@ -18,6 +19,7 @@ final class Settings {
             Key.enabled: true,
             Key.tone: Tone.auto.rawValue,
             Key.heightAdjustment: 0.0,
+            Key.shadow: true,
             Key.shadowStrength: 1.0,
         ])
     }
@@ -33,10 +35,23 @@ final class Settings {
         defaults.double(forKey: Key.heightAdjustment)
     }
 
-    /// Multiplier on the soft edge under the bar; 0 turns it off. Not in the
-    /// menu, for the same reason `heightAdjustment` isn't — see `Shadow`.
+    /// Whether to cast the soft edge under the bar at all.
+    var shadowEnabled: Bool {
+        get { defaults.bool(forKey: Key.shadow) }
+        set { defaults.set(newValue, forKey: Key.shadow); post() }
+    }
+
+    /// How heavy that edge is. Not in the menu, for the same reason
+    /// `heightAdjustment` isn't — see `Shadow`.
     var shadowStrength: Double {
         max(0, defaults.double(forKey: Key.shadowStrength))
+    }
+
+    /// The strength as drawn. Held apart from the menu item on purpose: turning
+    /// the shadow off and on again gives back whatever it was tuned to, rather
+    /// than resetting it to full.
+    var resolvedShadowStrength: Double {
+        shadowEnabled ? shadowStrength : 0
     }
 
     /// Which variant to use. Auto follows the menu bar's own appearance.

@@ -10,8 +10,8 @@ Mountain Lion. One look, measured off Lickable itself (see below).
 ./build.sh --run     # builds GlossyBar.app and launches it
 ```
 
-The status item has almost nothing in it on purpose: on/off, bar tone, Open at
-Login, Quit. Everything else is fixed — the Tiger curve at full strength, on
+The status item has almost nothing in it on purpose: on/off, bar tone, shadow,
+Open at Login, Quit. Everything else is fixed — the Tiger curve at full strength, on
 every display, with the keep-alive always running.
 
 ## How it works
@@ -201,9 +201,11 @@ Two deliberate departures:
   anything in front of it. Same window and same layer here, but 16pt peaking at
   0.10 alpha and easing to nothing, because Lickable's reads as a band of
   darkness across the top of the desktop rather than an edge. `Shadow` in
-  `Style.swift` holds the profile. There is no menu item, but
-  `defaults write com.glossybar.GlossyBar shadowStrength -float 0` turns it off
-  and `2` doubles it, applying within a second.
+  `Style.swift` holds the profile. **Shadow** in the menu turns it on and off;
+  how heavy it is stays out of the menu, but
+  `defaults write com.glossybar.GlossyBar shadowStrength -float 0.5` halves it
+  and `2` doubles it, applying within a second. Toggling the menu item gives back
+  whatever the strength was tuned to.
 
 The light variant follows the same shape, but spends its upper-half lightening
 before the glyph rows (~0.20). Lickable lightens straight through them, which is
