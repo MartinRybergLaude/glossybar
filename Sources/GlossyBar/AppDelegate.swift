@@ -1,10 +1,15 @@
 import AppKit
 import ServiceManagement
+import Sparkle
 
 @main
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let overlays = OverlayManager()
     private var statusItem: NSStatusItem!
+    // `startingUpdater: true` kicks off Sparkle's scheduled check loop.
+    private let updater = SPUStandardUpdaterController(startingUpdater: true,
+                                                       updaterDelegate: nil,
+                                                       userDriverDelegate: nil)
 
     static func main() {
         let app = NSApplication.shared
@@ -80,6 +85,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         login.state = SMAppService.mainApp.status == .enabled ? .on : .off
         menu.addItem(login)
 
+        let update = NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdates),
+                                keyEquivalent: "")
+        update.target = self
+        update.isEnabled = updater.updater.canCheckForUpdates
+        menu.addItem(update)
+
         let quit = NSMenuItem(title: "Quit GlossyBar", action: #selector(quit), keyEquivalent: "q")
         quit.target = self
         menu.addItem(quit)
@@ -120,6 +131,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             alert.messageText = "Couldn't change the login item"
             alert.runModal()
         }
+    }
+
+    @objc private func checkForUpdates() {
+        updater.checkForUpdates(nil)
     }
 
     @objc private func quit() {

@@ -1,7 +1,15 @@
-# SwiftPM build products
+# Build
 .build/
+.swiftpm/
 
-# Assembled app bundle — produced by ./build.sh
-GlossyBar.app/
+# App bundle output
+dist/
+*.app
 
+# macOS
 .DS_Store
+
+# Release artefacts (generated locally by scripts/generate-appcast.sh;
+# the canonical copy lives on the gh-pages branch).
+appcast.xml
+releases/

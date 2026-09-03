@@ -7,8 +7,12 @@ Mountain Lion. One look, measured off Lickable itself (see below).
 ## Build and run
 
 ```sh
-./build.sh --run     # builds GlossyBar.app and launches it
+make run             # builds dist/GlossyBar.app (ad-hoc signed) and launches it
+make release         # Developer ID signed + notarized + stapled DMG in dist/
+make ship            # bump patch version, tag, push — CI builds & publishes the release
 ```
+
+`make ship-minor` / `make ship-major` bump the other components.
 
 The status item has almost nothing in it on purpose: on/off, bar tone, shadow,
 Open at Login, Quit. Everything else is fixed — the Tiger curve at full

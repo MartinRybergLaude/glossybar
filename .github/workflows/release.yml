@@ -1,0 +1,104 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    # macos-26 ships Xcode 26.x, matching the local toolchain.
+    runs-on: macos-26
+    timeout-minutes: 60
+
+    env:
+      DEVELOPER_ID: "Developer ID Application: MARTIN JOHANNES RYBERG LAUDE (${{ secrets.APPLE_TEAM_ID }})"
+      NOTARY_PROFILE: glossybar-notary
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0  # generate-appcast / CFBundleVersion need full history
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Install create-dmg
+        run: brew install create-dmg
+
+      - name: Import Developer ID certificate
+        env:
+          P12_BASE64:        ${{ secrets.MAC_DEV_ID_CERT_P12_BASE64 }}
+          P12_PASSWORD:      ${{ secrets.MAC_DEV_ID_CERT_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          KC=build.keychain
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KC"
+          security set-keychain-settings -lut 21600 "$KC"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KC"
+
+          echo "$P12_BASE64" | base64 -d > /tmp/cert.p12
+          security import /tmp/cert.p12 -k "$KC" -P "$P12_PASSWORD" \
+              -T /usr/bin/codesign -T /usr/bin/security
+          rm /tmp/cert.p12
+
+          security list-keychains -d user -s "$KC" login.keychain
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+              -s -k "$KEYCHAIN_PASSWORD" "$KC"
+
+      - name: Store notarytool credentials
+        env:
+          APPLE_ID:               ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID:          ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_SPECIFIC_PWD: ${{ secrets.APPLE_APP_SPECIFIC_PWD }}
+        run: |
+          xcrun notarytool store-credentials "$NOTARY_PROFILE" \
+              --apple-id "$APPLE_ID" \
+              --team-id "$APPLE_TEAM_ID" \
+              --password "$APPLE_APP_SPECIFIC_PWD"
+
+      - name: Resolve SPM dependencies
+        run: make resolve
+
+      - name: Derive version from tag, bump Info.plist
+        id: ver
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          BUILD=$(git rev-list --count HEAD)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "build=$BUILD"     >> "$GITHUB_OUTPUT"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" BundleResources/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD"               BundleResources/Info.plist
+
+      - name: Build, sign, DMG, notarize, staple
+        run: make release
+
+      - name: Generate appcast
+        env:
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+        run: |
+          mkdir -p releases
+          cp "dist/GlossyBar-${{ steps.ver.outputs.version }}.dmg" releases/
+          ./scripts/generate-appcast.sh ./releases
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "v${{ steps.ver.outputs.version }}" \
+              "dist/GlossyBar-${{ steps.ver.outputs.version }}.dmg" \
+              --title "GlossyBar ${{ steps.ver.outputs.version }}" \
+              --generate-notes
+
+      - name: Publish appcast to gh-pages
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./scripts/publish-appcast.sh
+
+      - name: Cleanup keychain
+        if: always()
+        run: security delete-keychain build.keychain || true
