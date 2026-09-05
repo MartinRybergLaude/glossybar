@@ -58,7 +58,15 @@ private final class ShadowView: NSView {
         // 1:1 down the falloff.
         root.contentsGravity = .resize
         layer = root
-        layerContentsRedrawPolicy = .onSetNeedsDisplay
+        // The gradient is set straight into the root layer's `contents`, so
+        // AppKit must never redraw the layer for us. Under `.onSetNeedsDisplay`
+        // any `needsDisplay` — display sleep, a display coming or going, a
+        // backing-store purge — has AppKit clear `contents` to nil on the next
+        // display pass, and with no `draw(_:)` here nothing repaints it: the
+        // window stays ordered in, fully transparent, until the app restarts.
+        // The gloss has the same shape but its keep-alive reassigns `contents`
+        // every 0.4s, which is why only the shadow ever stayed gone.
+        layerContentsRedrawPolicy = .never
     }
 
     required init?(coder: NSCoder) { fatalError("not supported") }
@@ -72,7 +80,8 @@ private final class ShadowView: NSView {
 
         let scale = window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2
         let key = (bounds.height, scale, strength)
-        if let builtFor, builtFor == key { return }
+        // Rebuild if the image was ever taken away, whatever the cache says.
+        if let builtFor, builtFor == key, root.contents != nil { return }
         builtFor = key
 
         CATransaction.begin()
