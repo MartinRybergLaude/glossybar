@@ -19,11 +19,23 @@ APP_BUNDLE = $(DIST_DIR)/$(APP_NAME)
 # break version resolution in SPM's subprocess).
 SWIFT = GIT_CONFIG_GLOBAL=/dev/null swift
 
+# actool ships with Xcode, not the Command Line Tools. If the active developer
+# dir can't find it, point just the icon step at an installed Xcode so the
+# rest of the build keeps using the selected toolchain.
+ifeq ($(shell xcrun --find actool 2>/dev/null),)
+  XCODE_APP := $(firstword $(wildcard /Applications/Xcode.app /Applications/Xcode-beta.app))
+  ACTOOL = DEVELOPER_DIR="$(XCODE_APP)/Contents/Developer" xcrun actool
+else
+  ACTOOL = xcrun actool
+endif
+
 # Release configuration. Override via env in CI.
 DEVELOPER_ID   ?= Developer ID Application: MARTIN JOHANNES RYBERG LAUDE (X67GNG6U35)
 NOTARY_PROFILE ?= glossybar-notary
 ENTITLEMENTS   := BundleResources/GlossyBar.entitlements
 VERSION         = $(shell /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" BundleResources/Info.plist)
+MIN_MACOS       = $(shell /usr/libexec/PlistBuddy -c "Print :LSMinimumSystemVersion" BundleResources/Info.plist)
+SDK_VERSION     = $(shell xcrun --show-sdk-version)
 DMG_NAME        = GlossyBar-$(VERSION).dmg
 
 .PHONY: all build app run release-app sign dmg notarize release clean test resolve
@@ -41,7 +53,25 @@ app: build
 	@mkdir -p "$(APP_BUNDLE)/Contents/MacOS"
 	@mkdir -p "$(APP_BUNDLE)/Contents/Resources"
 	@cp "$(BUILD_DIR)/$(BIN_NAME)" "$(APP_BUNDLE)/Contents/MacOS/$(BIN_NAME)"
+	@# SwiftPM records the deployment target as the SDK version in
+	@# LC_BUILD_VERSION, so AppKit treats the app as built against macOS 13
+	@# and draws old-style window chrome (small traffic lights, no Liquid
+	@# Glass). Stamp the real SDK version so linked-on-or-after checks pass.
+	@vtool -set-build-version macos "$(MIN_MACOS)" "$(SDK_VERSION)" -replace \
+		-output "$(APP_BUNDLE)/Contents/MacOS/$(BIN_NAME).tmp" "$(APP_BUNDLE)/Contents/MacOS/$(BIN_NAME)" \
+		&& mv "$(APP_BUNDLE)/Contents/MacOS/$(BIN_NAME).tmp" "$(APP_BUNDLE)/Contents/MacOS/$(BIN_NAME)"
 	@cp "BundleResources/Info.plist" "$(APP_BUNDLE)/Contents/Info.plist"
+	@# Compile the Icon Composer source into Assets.car (live Liquid Glass on
+	@# macOS 26+) plus AppIcon.icns (legacy fallback). actool accepts the
+	@# .icon file directly as the document arg — wrapping it in an .xcassets
+	@# silently produces nothing.
+	@$(ACTOOL) BundleResources/AppIcon.icon \
+		--app-icon AppIcon \
+		--compile "$(APP_BUNDLE)/Contents/Resources" \
+		--output-partial-info-plist /dev/null \
+		--platform macosx --target-device mac \
+		--minimum-deployment-target 26.0 \
+		--skip-app-store-deployment >/dev/null
 	@printf "APPL????" > "$(APP_BUNDLE)/Contents/PkgInfo"
 	@# Embed Sparkle.framework. SPM links against the dylib but doesn't copy
 	@# the xcframework into the bundle for executable products — we have to.

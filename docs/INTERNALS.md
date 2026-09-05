@@ -151,7 +151,10 @@ Each style therefore ships two variants, and `MenuBarProbe` picks between them.
 It doesn't guess from the wallpaper's brightness — it asks a status item, because
 AppKit already computes this to decide whether template icons invert: the
 button's effective appearance comes back *VibrantDark* over a dark bar even while
-the app itself is in Aqua. Override it with **Bar Tone** if you want.
+the app itself is in Aqua. GlossyBar shows no menu bar icon, so the status item
+it asks is zero points wide with no image; it is in the bar, just not visible.
+The reading is only valid once the item has settled into the bar, a run-loop
+turn after it is created. Override it with **Bar Tone** if you want.
 
 **The full Tiger look needs a light desktop.** macOS picks the menu bar's text
 colour from the wallpaper, and nothing an overlay does can change it. Over a dark

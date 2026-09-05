@@ -6,6 +6,8 @@ Bring the Aqua menu bar back to your Mac.
 
 Download the latest DMG from [Releases](https://github.com/MartinRybergLaude/glossybar/releases), drag GlossyBar to Applications, open it.
 
+GlossyBar has no menu bar icon. Opening it shows its settings window; close the window and it keeps running in the background. Open GlossyBar again to get the settings back.
+
 ## Build from source
 
 ```sh

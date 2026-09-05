@@ -1,11 +1,16 @@
 import AppKit
-import ServiceManagement
 import Sparkle
 
 @main
-final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate {
     private let overlays = OverlayManager()
-    private var statusItem: NSStatusItem!
+    private var settingsWindow: SettingsWindowController!
+
+    /// Not shown to anyone: zero points wide, no image. It exists so
+    /// `MenuBarProbe` has a view inside the menu bar to read the bar's
+    /// appearance from — see the probe for why nothing else works.
+    private var probeItem: NSStatusItem!
+
     // `startingUpdater: true` kicks off Sparkle's scheduled check loop.
     private let updater = SPUStandardUpdaterController(startingUpdater: true,
                                                        updaterDelegate: nil,
@@ -21,123 +26,77 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        setUpStatusItem()
-        if let button = statusItem.button {
-            overlays.probe = MenuBarProbe(view: button)
-        }
+        probeItem = NSStatusBar.system.statusItem(withLength: 0)
+        let probe = probeItem.button.map(MenuBarProbe.init)
+        overlays.probe = probe
         overlays.start()
+
+        NSApp.mainMenu = buildMainMenu()
+        settingsWindow = SettingsWindowController(updater: updater.updater, probe: probe)
+
+        // Opening the app by hand means "show me the settings". Coming up with
+        // the session as a login item, it just quietly starts drawing.
+        if !launchedAsLoginItem {
+            settingsWindow.show()
+        }
+    }
+
+    /// Launching the app while it's already running — from the Finder, Spotlight,
+    /// or the Dock — lands here. That's the only way back to the settings once
+    /// the window has been closed.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
+        settingsWindow.show()
+        return false
     }
 
     func applicationWillTerminate(_ notification: Notification) {
         overlays.stop()
     }
 
-    // MARK: - Status item
-
-    private func setUpStatusItem() {
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        if let button = statusItem.button {
-            let image = NSImage(systemSymbolName: "menubar.rectangle",
-                                accessibilityDescription: "GlossyBar")
-            image?.isTemplate = true
-            button.image = image
+    /// Whether launchd started us as a login item rather than the user.
+    private var launchedAsLoginItem: Bool {
+        guard let event = NSAppleEventManager.shared().currentAppleEvent,
+              event.eventID == AEEventID(kAEOpenApplication),
+              let prop = event.paramDescriptor(forKeyword: AEKeyword(keyAEPropData)) else {
+            return false
         }
-        let menu = NSMenu()
-        menu.delegate = self
-        statusItem.menu = menu
+        return prop.enumCodeValue == OSType(keyAELaunchedAsLogInItem)
     }
 
-    func menuNeedsUpdate(_ menu: NSMenu) {
-        let settings = Settings.shared
-        menu.removeAllItems()
+    // MARK: - Main menu
 
-        let toggle = NSMenuItem(title: settings.enabled ? "Turn Off" : "Turn On",
-                                action: #selector(toggleEnabled), keyEquivalent: "")
-        toggle.target = self
-        menu.addItem(toggle)
+    /// Only visible while the settings window is open and the app is regular,
+    /// but without it Cmd-W and Cmd-Q do nothing.
+    private func buildMainMenu() -> NSMenu {
+        let main = NSMenu()
 
-        // The only real choice left: which way the gloss shades. Automatic reads
-        // it off the menu bar and is nearly always right, but a wrong guess is
-        // very visible, so the override stays.
-        menu.addItem(.separator())
-        menu.addItem(sectionHeader("Bar Tone"))
-        for tone in Settings.Tone.allCases {
-            let item = NSMenuItem(title: tone.name, action: #selector(selectTone(_:)), keyEquivalent: "")
-            item.target = self
-            item.representedObject = tone.rawValue
-            item.state = settings.tone == tone ? .on : .off
-            if tone == .auto, let button = statusItem.button {
-                let resolved = MenuBarProbe(view: button).polarity
-                item.title = "Automatic (\(resolved == .light ? "light" : "dark"))"
-            }
-            menu.addItem(item)
-        }
-
-        menu.addItem(.separator())
-        let shadow = NSMenuItem(title: "Shadow", action: #selector(toggleShadow), keyEquivalent: "")
-        shadow.target = self
-        shadow.state = settings.shadowEnabled ? .on : .off
-        menu.addItem(shadow)
-
-        menu.addItem(.separator())
-        let login = NSMenuItem(title: "Open at Login", action: #selector(toggleLoginItem), keyEquivalent: "")
-        login.target = self
-        login.state = SMAppService.mainApp.status == .enabled ? .on : .off
-        menu.addItem(login)
-
-        let update = NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdates),
-                                keyEquivalent: "")
+        let appMenu = NSMenu()
+        appMenu.addItem(withTitle: "About GlossyBar",
+                        action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)),
+                        keyEquivalent: "")
+        appMenu.addItem(.separator())
+        let update = appMenu.addItem(withTitle: "Check for Updates…",
+                                     action: #selector(checkForUpdates), keyEquivalent: "")
         update.target = self
-        update.isEnabled = updater.updater.canCheckForUpdates
-        menu.addItem(update)
+        appMenu.addItem(.separator())
+        appMenu.addItem(withTitle: "Quit GlossyBar",
+                        action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        let appItem = NSMenuItem()
+        appItem.submenu = appMenu
+        main.addItem(appItem)
 
-        let quit = NSMenuItem(title: "Quit GlossyBar", action: #selector(quit), keyEquivalent: "q")
-        quit.target = self
-        menu.addItem(quit)
-    }
+        let windowMenu = NSMenu(title: "Window")
+        windowMenu.addItem(withTitle: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        windowMenu.addItem(withTitle: "Minimize", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
+        let windowItem = NSMenuItem()
+        windowItem.submenu = windowMenu
+        main.addItem(windowItem)
+        NSApp.windowsMenu = windowMenu
 
-    private func sectionHeader(_ title: String) -> NSMenuItem {
-        let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
-        item.isEnabled = false
-        return item
-    }
-
-    // MARK: - Actions
-
-    @objc private func toggleEnabled() {
-        Settings.shared.enabled.toggle()
-    }
-
-    @objc private func selectTone(_ sender: NSMenuItem) {
-        guard let raw = sender.representedObject as? String,
-              let tone = Settings.Tone(rawValue: raw) else { return }
-        Settings.shared.tone = tone
-    }
-
-    @objc private func toggleShadow() {
-        Settings.shared.shadowEnabled.toggle()
-    }
-
-    @objc private func toggleLoginItem() {
-        let service = SMAppService.mainApp
-        do {
-            if service.status == .enabled {
-                try service.unregister()
-            } else {
-                try service.register()
-            }
-        } catch {
-            let alert = NSAlert(error: error)
-            alert.messageText = "Couldn't change the login item"
-            alert.runModal()
-        }
+        return main
     }
 
     @objc private func checkForUpdates() {
         updater.checkForUpdates(nil)
-    }
-
-    @objc private func quit() {
-        NSApp.terminate(nil)
     }
 }

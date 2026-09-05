@@ -8,6 +8,10 @@
 	<string>GlossyBar</string>
 	<key>CFBundleExecutable</key>
 	<string>GlossyBar</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<key>CFBundleIconName</key>
+	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
 	<string>com.glossybar.GlossyBar</string>
 	<key>CFBundleInfoDictionaryVersion</key>
