@@ -1,3 +1,5 @@
+<img src="docs/assets/app-icon.png" width="128" alt="GlossyBar icon">
+
 # GlossyBar
 
 Bring the Aqua menu bar back to your Mac.
